@@ -34,7 +34,7 @@ function App(){
     }else{
       setFiltered(conversations);
     }
-  },[search]);
+  },[search, conversations]);
 
   const connectWs=()=>{
     const protocol=window.location.protocol==='https:'?'wss:':'ws:';

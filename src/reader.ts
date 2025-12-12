@@ -245,8 +245,13 @@ export class ClaudeHistoryReader {
     if (!query.trim()) return allConversations;
 
     const lowerQuery = query.toLowerCase();
+    console.log(
+      `[Claude Memory] Searching for query "${lowerQuery}" with project "${
+        projectPath || "all"
+      }"...`
+    );
 
-    return allConversations.filter((conv) => {
+    const results = allConversations.filter((conv) => {
       // Search in first message preview
       if (conv.firstMessage.toLowerCase().includes(lowerQuery)) return true;
 
@@ -259,6 +264,11 @@ export class ClaudeHistoryReader {
         return text.includes(lowerQuery);
       });
     });
+
+    console.log(
+      `[Claude Memory] Found ${results.length} results for query "${lowerQuery}".`
+    );
+    return results;
   }
 
   private decodeProjectName(encodedName: string): string {
