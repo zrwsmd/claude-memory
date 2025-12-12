@@ -242,49 +242,57 @@ export class ClaudeHistoryReader {
       ? this.getConversationsByProject(projectPath)
       : this.getAllConversations();
 
-    if (!query.trim()) return allConversations;
+    if (!query || !query.trim()) {
+      return allConversations;
+    }
 
     const lowerQuery = query.toLowerCase();
-    console.log(
-      `[Claude Memory] Searching for query "${lowerQuery}" with project "${
-        projectPath || "all"
-      }"...`
-    );
+    const results: ClaudeConversation[] = [];
 
-    const results = allConversations
-      .map((conv) => {
-        let snippet: string | null = null;
+    for (const conv of allConversations) {
+      let snippet: string | null = null;
 
-        // Search in project name
-        if (conv.projectName.toLowerCase().includes(lowerQuery)) {
+      // First, search in message content
+      for (const msg of conv.messages) {
+        try {
+          const text = this.extractText(msg.content);
+          const index = text.toLowerCase().indexOf(lowerQuery);
+
+          if (index !== -1) {
+            // Found it! Extract a window of text AROUND the keyword
+            // Take 30 chars before and 100 chars after, roughly
+            const start = Math.max(0, index - 30);
+            const end = Math.min(text.length, index + query.length + 100);
+
+            snippet = text.substring(start, end);
+
+            // Add ellipsis if we truncated
+            if (start > 0) snippet = "..." + snippet;
+            if (end < text.length) snippet = snippet + "...";
+
+            break;
+          }
+        } catch (e) {
+          console.error(`Error processing message content in conversation ${conv.id}`, e);
+        }
+      }
+
+      // If no match in content, check project name
+      if (!snippet) {
+        if (conv.projectName && conv.projectName.toLowerCase().includes(lowerQuery)) {
           snippet = `Matched in project name: ${conv.projectName}`;
         }
+      }
 
-        // Search in all message content if no snippet found yet
-        if (!snippet) {
-          for (const msg of conv.messages) {
-            const text = this.extractText(msg.content);
-            if (text.toLowerCase().includes(lowerQuery)) {
-              snippet = text; // Found a matching message
-              break;
-            }
-          }
-        }
+      if (snippet) {
+        const matchedConv = { ...conv };
+        // We already truncated specifically around the keyword, so use it directly
+        matchedConv.searchSnippet = snippet;
+        results.push(matchedConv);
+      }
+    }
 
-        if (snippet) {
-          return {
-            ...conv,
-            searchSnippet: snippet.substring(0, 250), // Truncate for display
-          };
-        }
-
-        return null;
-      })
-      .filter(Boolean) as ClaudeConversation[];
-
-    console.log(
-      `[Claude Memory] Found ${results.length} results for query "${lowerQuery}".`
-    );
+    console.log(`[Claude Memory] Found ${results.length} results for query "${lowerQuery}".`);
     return results;
   }
 
