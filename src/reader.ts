@@ -9,6 +9,7 @@ export class ClaudeHistoryReader {
   constructor(claudePath?: string) {
     this.claudePath =
       claudePath || path.join(os.homedir(), ".claude", "projects");
+    //console.log(`[Claude Memory] Reading projects from path: ${this.claudePath}`);
   }
 
   private extractText(content: any): string {
@@ -251,11 +252,10 @@ export class ClaudeHistoryReader {
   }
 
   private decodeProjectName(encodedName: string): string {
-    // Claude encodes paths like: -Users-username-projects-myproject
-    // Decode back to readable format
-    return (
-      encodedName.replace(/^-+/, "").replace(/-+/g, "/").split("/").pop() ||
-      encodedName
-    );
+    // Claude encodes windows paths like e:\claude-project\my-project
+    // into a single folder name: e--claude-project-my-project
+    // The path separator becomes '--'. We want to extract the final component.
+    const parts = encodedName.split(/--/);
+    return parts[parts.length - 1] || encodedName;
   }
 }
