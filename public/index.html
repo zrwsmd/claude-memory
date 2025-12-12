@@ -140,18 +140,32 @@ function App(){
 
   const formatDate=(ts)=>new Date(ts).toLocaleString();
 
+  const renderHighlight = (text, query) => {
+    if (!query.trim()) {
+      return text;
+    }
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+      <>{parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase()
+            ? <strong key={i} style={{color: '#dd6b20', backgroundColor: '#feebc8'}}>{part}</strong>
+            : part
+        )}</>
+    );
+  };
+
   return <div className="container">
     <div className="sidebar">
       <div className="header">
         <h1>🧠 Claude Memory</h1>
         <div className="subtitle">Claude Code History Viewer</div>
-        
-        <select 
-          value={selectedProject} 
+
+        <select
+          value={selectedProject}
           onChange={e=>setSelectedProject(e.target.value)}
           style={{width:'100%',padding:'10px',marginBottom:'12px',border:'1px solid #cbd5e0',borderRadius:'8px',fontSize:'14px',background:'#fff',cursor:'pointer'}}
         >
-          <option value="all">📁 All Projects ({conversations.length})</option>
+          <option value="all">📁 All Projects ({projects.reduce((sum, p) => sum + p.conversationCount, 0)})</option>
           {projects.map(p=><option key={p.path} value={p.path}>📁 {p.name} ({p.conversationCount})</option>)}
         </select>
 
@@ -165,7 +179,11 @@ function App(){
         </div>:
         filtered.map(c=><div key={`${c.projectPath}-${c.id}`} className={`item ${selected?.id===c.id?'active':''}`} onClick={()=>loadConversation(c)}>
           <div className="item-header">
-            <div className="item-title">{c.firstMessage.substring(0,80)}{c.firstMessage.length>80?'...':''}</div>
+            <div className="item-title">{
+              search.trim() && c.searchSnippet
+              ? renderHighlight(c.searchSnippet, search)
+              : c.firstMessage.length > 80 ? `${c.firstMessage.substring(0, 80)}...` : c.firstMessage
+            }</div>
             {selectedProject==='all'&&<div className="item-project">{c.projectName}</div>}
           </div>
           <div className="item-meta">💬 {c.messageCount} messages · 📅 {formatDate(c.lastTimestamp)}</div>

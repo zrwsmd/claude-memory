@@ -251,19 +251,36 @@ export class ClaudeHistoryReader {
       }"...`
     );
 
-    const results = allConversations.filter((conv) => {
-      // Search in first message preview
-      if (conv.firstMessage.toLowerCase().includes(lowerQuery)) return true;
+    const results = allConversations
+      .map((conv) => {
+        let snippet: string | null = null;
 
-      // Search in project name
-      if (conv.projectName.toLowerCase().includes(lowerQuery)) return true;
+        // Search in project name
+        if (conv.projectName.toLowerCase().includes(lowerQuery)) {
+          snippet = `Matched in project name: ${conv.projectName}`;
+        }
 
-      // Search in all message content
-      return conv.messages.some((msg) => {
-        const text = this.extractText(msg.content).toLowerCase();
-        return text.includes(lowerQuery);
-      });
-    });
+        // Search in all message content if no snippet found yet
+        if (!snippet) {
+          for (const msg of conv.messages) {
+            const text = this.extractText(msg.content);
+            if (text.toLowerCase().includes(lowerQuery)) {
+              snippet = text; // Found a matching message
+              break;
+            }
+          }
+        }
+
+        if (snippet) {
+          return {
+            ...conv,
+            searchSnippet: snippet.substring(0, 250), // Truncate for display
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean) as ClaudeConversation[];
 
     console.log(
       `[Claude Memory] Found ${results.length} results for query "${lowerQuery}".`

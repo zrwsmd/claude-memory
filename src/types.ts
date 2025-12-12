@@ -13,6 +13,7 @@ export interface ClaudeConversation {
   lastTimestamp: number;
   messageCount: number;
   filePath: string;
+  searchSnippet?: string;
 }
 
 export interface ServerConfig {
