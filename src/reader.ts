@@ -40,21 +40,31 @@ export class ClaudeHistoryReader {
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
+          // New format: role is the top-level type, and content is nested in `message`
           if (
-            entry.role &&
-            (entry.role === "user" || entry.role === "assistant")
+            (entry.type === "user" || entry.type === "assistant") &&
+            entry.message
           ) {
             messages.push({
-              role: entry.role,
-              content: entry.content,
+              role: entry.message.role || entry.type,
+              content: entry.message.content,
               timestamp: entry.timestamp || Date.now(),
             });
           }
         } catch (e) {
-          // Skip invalid lines
+          // Skip invalid lines, but log it for debugging
+          console.warn(
+            `[Claude Memory] Skipping invalid line in ${filePath}: ${line.substring(
+              0,
+              100
+            )}...`
+          );
         }
       }
 
+      console.log(
+        `[Claude Memory] Parsed ${messages.length} messages from ${filePath}`
+      );
       return messages;
     } catch (error) {
       console.error(`Error reading file ${filePath}:`, error);
