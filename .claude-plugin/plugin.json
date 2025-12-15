@@ -1,0 +1,51 @@
+{
+  "name": "claude-memory-viewer",
+  "version": "1.0.0",
+  "description": "View and search Claude Code conversation history through a local web interface",
+  "author": {
+    "name": "zrwsmd",
+    "url": "https://github.com/zrwsmd"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zrwsmd/claude-memory.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "history",
+    "search",
+    "conversations",
+    "viewer",
+    "web-interface"
+  ],
+  "skills": [
+    "skills/claude-memory-viewer"
+  ],
+  "dependencies": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
+  "install": {
+    "steps": [
+      {
+        "name": "Install dependencies",
+        "command": "npm install",
+        "cwd": "skills/claude-memory-viewer"
+      },
+      {
+        "name": "Build project",
+        "command": "npm run build",
+        "cwd": "skills/claude-memory-viewer"
+      }
+    ]
+  },
+  "uninstall": {
+    "steps": [
+      {
+        "name": "Clean build artifacts",
+        "command": "rm -rf dist node_modules",
+        "cwd": "skills/claude-memory-viewer"
+      }
+    ]
+  }
+}
