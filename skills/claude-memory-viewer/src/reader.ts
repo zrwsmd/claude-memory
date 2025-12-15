@@ -9,7 +9,6 @@ export class ClaudeHistoryReader {
   constructor(claudePath?: string) {
     this.claudePath =
       claudePath || path.join(os.homedir(), ".claude", "projects");
-    //console.log(`[Claude Memory] Reading projects from path: ${this.claudePath}`);
   }
 
   private extractText(content: any): string {
@@ -52,24 +51,26 @@ export class ClaudeHistoryReader {
             });
           }
         } catch (e) {
-          // Skip invalid lines, but log it for debugging
-          // console.warn(
-          //   `[Claude Memory] Skipping invalid line in ${filePath}: ${line.substring(
-          //     0,
-          //     100
-          //   )}...`
-          // );
+          // Skip invalid lines
         }
       }
 
-      // console.log(
-      //   `[Claude Memory] Parsed ${messages.length} messages from ${filePath}`
-      // );
       return messages;
     } catch (error) {
       console.error(`Error reading file ${filePath}:`, error);
       return [];
     }
+  }
+
+  private isConversationEmpty(messages: ClaudeMessage[]): boolean {
+    // Check if conversation has no messages or all messages are empty
+    if (messages.length === 0) return true;
+
+    // Check if all messages have empty content
+    return messages.every((m) => {
+      const text = this.extractText(m.content);
+      return !text || text.trim().length === 0;
+    });
   }
 
   getAllProjects(): Array<{
@@ -99,11 +100,21 @@ export class ClaudeHistoryReader {
         .readdirSync(projectPath)
         .filter((file) => file.endsWith(".jsonl"));
 
-      if (files.length > 0) {
+      // Count only non-empty conversations
+      let validCount = 0;
+      for (const file of files) {
+        const filePath = path.join(projectPath, file);
+        const messages = this.parseJsonlFile(filePath);
+        if (!this.isConversationEmpty(messages)) {
+          validCount++;
+        }
+      }
+
+      if (validCount > 0) {
         projects.push({
           path: projectDir,
           name: this.decodeProjectName(projectDir),
-          conversationCount: files.length,
+          conversationCount: validCount,
         });
       }
     }
@@ -134,27 +145,30 @@ export class ClaudeHistoryReader {
         const filePath = path.join(projectPath, file);
         const messages = this.parseJsonlFile(filePath);
 
-        if (messages.length > 0) {
-          const firstUserMsg = messages.find((m) => m.role === "user");
-          const firstMessage = firstUserMsg
-            ? this.extractText(firstUserMsg.content).substring(0, 150)
-            : "Empty conversation";
-
-          // Use file modification time instead of last message timestamp
-          const stats = fs.statSync(filePath);
-          const lastTimestamp = stats.mtimeMs;
-
-          conversations.push({
-            id: file.replace(".jsonl", ""),
-            projectPath: projectDir,
-            projectName: this.decodeProjectName(projectDir),
-            messages,
-            firstMessage,
-            lastTimestamp,
-            messageCount: messages.length,
-            filePath,
-          });
+        // Skip empty conversations
+        if (this.isConversationEmpty(messages)) {
+          continue;
         }
+
+        const firstUserMsg = messages.find((m) => m.role === "user");
+        const firstMessage = firstUserMsg
+          ? this.extractText(firstUserMsg.content).substring(0, 150)
+          : "Empty conversation";
+
+        // Use file modification time instead of last message timestamp
+        const stats = fs.statSync(filePath);
+        const lastTimestamp = stats.mtimeMs;
+
+        conversations.push({
+          id: file.replace(".jsonl", ""),
+          projectPath: projectDir,
+          projectName: this.decodeProjectName(projectDir),
+          messages,
+          firstMessage,
+          lastTimestamp,
+          messageCount: messages.length,
+          filePath,
+        });
       }
     }
 
@@ -177,27 +191,30 @@ export class ClaudeHistoryReader {
       const filePath = path.join(fullProjectPath, file);
       const messages = this.parseJsonlFile(filePath);
 
-      if (messages.length > 0) {
-        const firstUserMsg = messages.find((m) => m.role === "user");
-        const firstMessage = firstUserMsg
-          ? this.extractText(firstUserMsg.content).substring(0, 150)
-          : "Empty conversation";
-
-        // Use file modification time instead of last message timestamp
-        const stats = fs.statSync(filePath);
-        const lastTimestamp = stats.mtimeMs;
-
-        conversations.push({
-          id: file.replace(".jsonl", ""),
-          projectPath,
-          projectName: this.decodeProjectName(projectPath),
-          messages,
-          firstMessage,
-          lastTimestamp,
-          messageCount: messages.length,
-          filePath,
-        });
+      // Skip empty conversations
+      if (this.isConversationEmpty(messages)) {
+        continue;
       }
+
+      const firstUserMsg = messages.find((m) => m.role === "user");
+      const firstMessage = firstUserMsg
+        ? this.extractText(firstUserMsg.content).substring(0, 150)
+        : "Empty conversation";
+
+      // Use file modification time instead of last message timestamp
+      const stats = fs.statSync(filePath);
+      const lastTimestamp = stats.mtimeMs;
+
+      conversations.push({
+        id: file.replace(".jsonl", ""),
+        projectPath,
+        projectName: this.decodeProjectName(projectPath),
+        messages,
+        firstMessage,
+        lastTimestamp,
+        messageCount: messages.length,
+        filePath,
+      });
     }
 
     return conversations.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
@@ -216,7 +233,9 @@ export class ClaudeHistoryReader {
     if (!fs.existsSync(filePath)) return null;
 
     const messages = this.parseJsonlFile(filePath);
-    if (messages.length === 0) return null;
+
+    // Return null for empty conversations
+    if (this.isConversationEmpty(messages)) return null;
 
     const firstUserMsg = messages.find((m) => m.role === "user");
     const firstMessage = firstUserMsg
