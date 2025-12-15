@@ -2,7 +2,10 @@
   "name": "claude-memory-marketplace",
   "version": "1.0.0",
   "description": "Official marketplace for Claude Memory plugins",
-  "owner": "zrwsmd",
+  "owner": {
+    "name": "zhao ruiwen",
+    "email": "zhao.ruiwen@anthropic.com"
+  },
   "plugins": [
     {
       "name": "claude-memory-viewer",
