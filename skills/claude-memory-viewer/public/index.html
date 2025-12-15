@@ -30,7 +30,7 @@ function App(){
     }
   },[selectedProject]);
 
-  // Debounce search input - wait 300ms after user stops typing
+  // Debounce search input - wait 600ms after user stops typing
   useEffect(()=>{
     if(debounceTimerRef.current){
       clearTimeout(debounceTimerRef.current);
