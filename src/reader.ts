@@ -53,18 +53,18 @@ export class ClaudeHistoryReader {
           }
         } catch (e) {
           // Skip invalid lines, but log it for debugging
-          console.warn(
-            `[Claude Memory] Skipping invalid line in ${filePath}: ${line.substring(
-              0,
-              100
-            )}...`
-          );
+          // console.warn(
+          //   `[Claude Memory] Skipping invalid line in ${filePath}: ${line.substring(
+          //     0,
+          //     100
+          //   )}...`
+          // );
         }
       }
 
-      console.log(
-        `[Claude Memory] Parsed ${messages.length} messages from ${filePath}`
-      );
+      // console.log(
+      //   `[Claude Memory] Parsed ${messages.length} messages from ${filePath}`
+      // );
       return messages;
     } catch (error) {
       console.error(`Error reading file ${filePath}:`, error);
@@ -278,13 +278,19 @@ export class ClaudeHistoryReader {
             break;
           }
         } catch (e) {
-          console.error(`Error processing message content in conversation ${conv.id}`, e);
+          console.error(
+            `Error processing message content in conversation ${conv.id}`,
+            e
+          );
         }
       }
 
       // If no match in content, check project name
       if (!snippet) {
-        if (conv.projectName && conv.projectName.toLowerCase().includes(lowerQuery)) {
+        if (
+          conv.projectName &&
+          conv.projectName.toLowerCase().includes(lowerQuery)
+        ) {
           snippet = `Matched in project name: ${conv.projectName}`;
         }
       }
@@ -297,7 +303,9 @@ export class ClaudeHistoryReader {
       }
     }
 
-    console.log(`[Claude Memory] Found ${results.length} results for query "${lowerQuery}".`);
+    console.log(
+      `[Claude Memory] Found ${results.length} results for query "${lowerQuery}".`
+    );
     return results;
   }
 
