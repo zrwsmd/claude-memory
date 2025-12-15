@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "claude-memory-viewer",
-      "source": "https://github.com/zrwsmd/claude-memory",
+      "source": "./",
       "description": "View and search Claude Code conversation history",
       "version": "1.0.0"
     }
