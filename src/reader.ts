@@ -140,8 +140,9 @@ export class ClaudeHistoryReader {
             ? this.extractText(firstUserMsg.content).substring(0, 150)
             : "Empty conversation";
 
-          const lastMsg = messages[messages.length - 1];
-          const lastTimestamp = lastMsg.timestamp || Date.now();
+          // Use file modification time instead of last message timestamp
+          const stats = fs.statSync(filePath);
+          const lastTimestamp = stats.mtimeMs;
 
           conversations.push({
             id: file.replace(".jsonl", ""),
@@ -182,7 +183,9 @@ export class ClaudeHistoryReader {
           ? this.extractText(firstUserMsg.content).substring(0, 150)
           : "Empty conversation";
 
-        const lastMsg = messages[messages.length - 1];
+        // Use file modification time instead of last message timestamp
+        const stats = fs.statSync(filePath);
+        const lastTimestamp = stats.mtimeMs;
 
         conversations.push({
           id: file.replace(".jsonl", ""),
@@ -190,7 +193,7 @@ export class ClaudeHistoryReader {
           projectName: this.decodeProjectName(projectPath),
           messages,
           firstMessage,
-          lastTimestamp: lastMsg.timestamp || Date.now(),
+          lastTimestamp,
           messageCount: messages.length,
           filePath,
         });
@@ -220,7 +223,9 @@ export class ClaudeHistoryReader {
       ? this.extractText(firstUserMsg.content).substring(0, 150)
       : "Empty conversation";
 
-    const lastMsg = messages[messages.length - 1];
+    // Use file modification time instead of last message timestamp
+    const stats = fs.statSync(filePath);
+    const lastTimestamp = stats.mtimeMs;
 
     return {
       id: conversationId,
@@ -228,7 +233,7 @@ export class ClaudeHistoryReader {
       projectName: this.decodeProjectName(projectPath),
       messages,
       firstMessage,
-      lastTimestamp: lastMsg.timestamp || Date.now(),
+      lastTimestamp,
       messageCount: messages.length,
       filePath,
     };
