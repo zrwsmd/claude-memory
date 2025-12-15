@@ -2,17 +2,13 @@
   "name": "claude-memory-marketplace",
   "version": "1.0.0",
   "description": "Official marketplace for Claude Memory plugins",
-  "author": {
-    "name": "zrwsmd",
-    "url": "https://github.com/zrwsmd"
-  },
+  "owner": "zrwsmd",
   "plugins": [
     {
       "name": "claude-memory-viewer",
-      "path": ".",
+      "source": "https://github.com/zrwsmd/claude-memory",
       "description": "View and search Claude Code conversation history",
-      "version": "1.0.0",
-      "featured": true
+      "version": "1.0.0"
     }
   ]
 }

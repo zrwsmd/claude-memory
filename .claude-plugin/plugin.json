@@ -2,14 +2,8 @@
   "name": "claude-memory-viewer",
   "version": "1.0.0",
   "description": "View and search Claude Code conversation history through a local web interface",
-  "author": {
-    "name": "zrwsmd",
-    "url": "https://github.com/zrwsmd"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/zrwsmd/claude-memory.git"
-  },
+  "owner": "zrwsmd",
+  "repository": "https://github.com/zrwsmd/claude-memory",
   "license": "MIT",
   "keywords": [
     "history",
