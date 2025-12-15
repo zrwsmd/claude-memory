@@ -86,7 +86,7 @@ npm start -- --port 3001
 - Try restarting the server
 
 **Search is slow?**
-- Search is debounced by 300ms to prevent lag
+- Search is debounced by 600ms to prevent lag
 - Large conversation histories may take a moment to index
 
 ## Development
