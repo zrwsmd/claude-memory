@@ -15,8 +15,10 @@ function App(){
   const [selected,setSelected]=useState(null);
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [debouncedSearch,setDebouncedSearch]=useState('');
   const [filtered,setFiltered]=useState([]);
   const wsRef=useRef(null);
+  const debounceTimerRef=useRef(null);
 
   useEffect(()=>{loadProjects();loadConversations();connectWs()},[]);
 
@@ -28,33 +30,48 @@ function App(){
     }
   },[selectedProject]);
 
+  // Debounce search input - wait 300ms after user stops typing
   useEffect(()=>{
-    if(search.trim()){
-      searchConversations(search);
+    if(debounceTimerRef.current){
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    debounceTimerRef.current=setTimeout(()=>{
+      setDebouncedSearch(search);
+    },300);
+
+    return ()=>{
+      if(debounceTimerRef.current){
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  },[search]);
+
+  // Perform search when debounced value changes
+  useEffect(()=>{
+    if(debouncedSearch.trim()){
+      searchConversations(debouncedSearch);
     }else{
       setFiltered(conversations);
     }
-  },[search, conversations]);
+  },[debouncedSearch, conversations]);
 
   // Auto-scroll to search match when a conversation is selected
   useEffect(()=>{
-    if(selected && search.trim()){
-      const query = search.toLowerCase();
-      // Find the first message that contains the search query
+    if(selected && debouncedSearch.trim()){
+      const query = debouncedSearch.toLowerCase();
       const index = selected.messages.findIndex(m =>
         extractText(m.content).toLowerCase().includes(query)
       );
 
       if(index !== -1){
-        // Wait for render cycle to complete
         setTimeout(()=>{
           const el = document.getElementById(`msg-${index}`);
           if(el){
             el.scrollIntoView({behavior: 'smooth', block: 'center'});
-            // Add a temporary flash effect
             el.style.transition = 'background-color 0.5s';
             const originalBg = el.style.backgroundColor;
-            el.style.backgroundColor = '#fffaf0'; // Highlight color
+            el.style.backgroundColor = '#fffaf0';
             setTimeout(() => {
               el.style.backgroundColor = originalBg;
             }, 1500);
@@ -197,19 +214,24 @@ function App(){
           {projects.map(p=><option key={p.path} value={p.path}>📁 {p.name} ({p.conversationCount})</option>)}
         </select>
 
-        <input className="search" placeholder="Search conversations..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        {!loading&&<div className="stats">💬 {filtered.length} conversation{filtered.length===1?'':'s'} {search?'found':'shown'}</div>}
+        <input 
+          className="search" 
+          placeholder="Search conversations..." 
+          value={search} 
+          onChange={e=>setSearch(e.target.value)}
+        />
+        {!loading&&<div className="stats">💬 {filtered.length} conversation{filtered.length===1?'':'s'} {debouncedSearch?'found':'shown'}</div>}
       </div>
       <div className="list">
         {loading?<div className="loading">Loading conversations...</div>:
         filtered.length===0?<div style={{padding:20,textAlign:'center',color:'#a0aec0'}}>
-          {search?'No matches found':'No conversations found'}
+          {debouncedSearch?'No matches found':'No conversations found'}
         </div>:
         filtered.map(c=><div key={`${c.projectPath}-${c.id}`} className={`item ${selected?.id===c.id?'active':''}`} onClick={()=>loadConversation(c)}>
           <div className="item-header">
             <div className="item-title">{
-              search.trim() && c.searchSnippet
-              ? renderHighlight(c.searchSnippet, search)
+              debouncedSearch.trim() && c.searchSnippet
+              ? renderHighlight(c.searchSnippet, debouncedSearch)
               : c.firstMessage.length > 80 ? `${c.firstMessage.substring(0, 80)}...` : c.firstMessage
             }</div>
             {selectedProject==='all'&&<div className="item-project">{c.projectName}</div>}
@@ -230,7 +252,7 @@ function App(){
           {selected.messages.map((m,i)=><div key={i} id={`msg-${i}`} className={`message ${m.role}`}>
             <div className="message-role">{m.role}</div>
             <div className="message-content">
-              {search.trim() ? renderHighlight(extractText(m.content), search) : extractText(m.content)}
+              {debouncedSearch.trim() ? renderHighlight(extractText(m.content), debouncedSearch) : extractText(m.content)}
             </div>
           </div>)}
         </div>
