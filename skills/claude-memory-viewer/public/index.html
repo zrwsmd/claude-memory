@@ -38,7 +38,7 @@ function App(){
     
     debounceTimerRef.current=setTimeout(()=>{
       setDebouncedSearch(search);
-    },300);
+    },600);
 
     return ()=>{
       if(debounceTimerRef.current){
