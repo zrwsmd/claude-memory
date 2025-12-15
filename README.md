@@ -6,7 +6,7 @@ Claude Code conversation history viewer with real-time updates.
 ```bash
 npm install
 npm run build
-npm link
+npm run dev
 ```
 
 ## Usage
