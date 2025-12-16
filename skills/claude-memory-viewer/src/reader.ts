@@ -73,6 +73,7 @@ export class ClaudeHistoryReader {
   /**
    * Calculate relevance score for a conversation based on where the keyword appears
    * Higher score = more relevant
+   * PRIMARY FACTOR: Message count (indicates conversation depth/importance)
    */
   private calculateRelevanceScore(
     conv: ClaudeConversation,
@@ -83,14 +84,19 @@ export class ClaudeHistoryReader {
     let snippet = "";
     let matchType = "";
 
-    // 1. Check first message (conversation title) - HIGHEST priority
+    // 1. MESSAGE COUNT - PRIMARY RANKING FACTOR (up to 3000 points)
+    // More messages = more important/detailed conversation
+    const messageScore = Math.min(conv.messageCount * 5, 3000);
+    score += messageScore;
+
+    // 2. Check first message (conversation title) - HIGH priority
     const firstUserMsg = conv.messages.find((m) => m.role === "user");
     if (firstUserMsg) {
       const firstText = this.extractText(firstUserMsg.content);
       const firstIndex = firstText.toLowerCase().indexOf(lowerQuery);
 
       if (firstIndex !== -1) {
-        score += 100; // Highest score for title match
+        score += 50; // Title match bonus
         matchType = "title";
 
         // Extract snippet around match
@@ -102,25 +108,25 @@ export class ClaudeHistoryReader {
 
         // Bonus: exact match at the beginning of first message
         if (firstIndex === 0) {
-          score += 50;
+          score += 30;
         }
         // Bonus: match in first 50 characters
         else if (firstIndex < 50) {
-          score += 25;
+          score += 15;
         }
       }
     }
 
-    // 2. Check project name - HIGH priority
+    // 3. Check project name - MEDIUM priority
     if (conv.projectName?.toLowerCase().includes(lowerQuery)) {
-      score += 75;
+      score += 30;
       if (!snippet) {
         snippet = `Matched in project: ${conv.projectName}`;
         matchType = "project";
       }
     }
 
-    // 3. Count occurrences in all messages - MEDIUM priority
+    // 4. Count occurrences in all messages - MEDIUM priority
     let totalOccurrences = 0;
     let earliestMessageIndex = -1;
 
@@ -150,29 +156,25 @@ export class ClaudeHistoryReader {
       }
     }
 
-    // Add score based on number of occurrences (max +50)
-    score += Math.min(totalOccurrences * 5, 50);
+    // Add score based on number of occurrences (max +30)
+    score += Math.min(totalOccurrences * 3, 30);
 
-    // 4. Bonus for appearing early in conversation
+    // 5. Small bonus for appearing early in conversation
     if (earliestMessageIndex !== -1) {
       if (earliestMessageIndex === 0) {
-        score += 30; // First message
+        score += 10; // First message
       } else if (earliestMessageIndex < 3) {
-        score += 15; // Within first 3 messages
-      } else if (earliestMessageIndex < 10) {
-        score += 5; // Within first 10 messages
+        score += 5; // Within first 3 messages
       }
     }
 
-    // 5. Bonus for recent conversations
+    // 6. Minor bonus for recent conversations
     const daysSinceLastUpdate =
       (Date.now() - conv.lastTimestamp) / (1000 * 60 * 60 * 24);
     if (daysSinceLastUpdate < 1) {
-      score += 20; // Updated today
+      score += 10; // Updated today
     } else if (daysSinceLastUpdate < 7) {
-      score += 10; // Updated this week
-    } else if (daysSinceLastUpdate < 30) {
-      score += 5; // Updated this month
+      score += 5; // Updated this week
     }
 
     return { score, snippet, matchType };
