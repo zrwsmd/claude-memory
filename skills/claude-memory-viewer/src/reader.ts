@@ -39,7 +39,6 @@ export class ClaudeHistoryReader {
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
-          // New format: role is the top-level type, and content is nested in `message`
           if (
             (entry.type === "user" || entry.type === "assistant") &&
             entry.message
@@ -63,14 +62,120 @@ export class ClaudeHistoryReader {
   }
 
   private isConversationEmpty(messages: ClaudeMessage[]): boolean {
-    // Check if conversation has no messages or all messages are empty
     if (messages.length === 0) return true;
 
-    // Check if all messages have empty content
     return messages.every((m) => {
       const text = this.extractText(m.content);
       return !text || text.trim().length === 0;
     });
+  }
+
+  /**
+   * Calculate relevance score for a conversation based on where the keyword appears
+   * Higher score = more relevant
+   */
+  private calculateRelevanceScore(
+    conv: ClaudeConversation,
+    query: string
+  ): { score: number; snippet: string; matchType: string } {
+    const lowerQuery = query.toLowerCase();
+    let score = 0;
+    let snippet = "";
+    let matchType = "";
+
+    // 1. Check first message (conversation title) - HIGHEST priority
+    const firstUserMsg = conv.messages.find((m) => m.role === "user");
+    if (firstUserMsg) {
+      const firstText = this.extractText(firstUserMsg.content);
+      const firstIndex = firstText.toLowerCase().indexOf(lowerQuery);
+
+      if (firstIndex !== -1) {
+        score += 100; // Highest score for title match
+        matchType = "title";
+
+        // Extract snippet around match
+        const start = Math.max(0, firstIndex - 30);
+        const end = Math.min(firstText.length, firstIndex + query.length + 100);
+        snippet = firstText.substring(start, end);
+        if (start > 0) snippet = "..." + snippet;
+        if (end < firstText.length) snippet = snippet + "...";
+
+        // Bonus: exact match at the beginning of first message
+        if (firstIndex === 0) {
+          score += 50;
+        }
+        // Bonus: match in first 50 characters
+        else if (firstIndex < 50) {
+          score += 25;
+        }
+      }
+    }
+
+    // 2. Check project name - HIGH priority
+    if (conv.projectName?.toLowerCase().includes(lowerQuery)) {
+      score += 75;
+      if (!snippet) {
+        snippet = `Matched in project: ${conv.projectName}`;
+        matchType = "project";
+      }
+    }
+
+    // 3. Count occurrences in all messages - MEDIUM priority
+    let totalOccurrences = 0;
+    let earliestMessageIndex = -1;
+
+    for (let i = 0; i < conv.messages.length; i++) {
+      const msg = conv.messages[i];
+      const text = this.extractText(msg.content).toLowerCase();
+      const occurrences = (text.match(new RegExp(lowerQuery, "gi")) || [])
+        .length;
+
+      if (occurrences > 0) {
+        totalOccurrences += occurrences;
+        if (earliestMessageIndex === -1) {
+          earliestMessageIndex = i;
+        }
+
+        // If we don't have a snippet yet, grab it from first occurrence
+        if (!snippet) {
+          const index = text.indexOf(lowerQuery);
+          const originalText = this.extractText(msg.content);
+          const start = Math.max(0, index - 30);
+          const end = Math.min(originalText.length, index + query.length + 100);
+          snippet = originalText.substring(start, end);
+          if (start > 0) snippet = "..." + snippet;
+          if (end < originalText.length) snippet = snippet + "...";
+          matchType = "message";
+        }
+      }
+    }
+
+    // Add score based on number of occurrences (max +50)
+    score += Math.min(totalOccurrences * 5, 50);
+
+    // 4. Bonus for appearing early in conversation
+    if (earliestMessageIndex !== -1) {
+      if (earliestMessageIndex === 0) {
+        score += 30; // First message
+      } else if (earliestMessageIndex < 3) {
+        score += 15; // Within first 3 messages
+      } else if (earliestMessageIndex < 10) {
+        score += 5; // Within first 10 messages
+      }
+    }
+
+    // 5. Bonus for recent conversations
+    const daysSinceLastUpdate =
+      (Date.now() - conv.lastTimestamp) / (1000 * 60 * 60 * 24);
+    if (daysSinceLastUpdate < 1) {
+      score += 20; // Updated today
+    } else if (daysSinceLastUpdate < 7) {
+      score += 10; // Updated this week
+    } else if (daysSinceLastUpdate < 30) {
+      score += 5; // Updated this month
+    }
+
+    return { score, snippet, matchType };
   }
 
   getAllProjects(): Array<{
@@ -100,7 +205,6 @@ export class ClaudeHistoryReader {
         .readdirSync(projectPath)
         .filter((file) => file.endsWith(".jsonl"));
 
-      // Count only non-empty conversations
       let validCount = 0;
       for (const file of files) {
         const filePath = path.join(projectPath, file);
@@ -145,7 +249,6 @@ export class ClaudeHistoryReader {
         const filePath = path.join(projectPath, file);
         const messages = this.parseJsonlFile(filePath);
 
-        // Skip empty conversations
         if (this.isConversationEmpty(messages)) {
           continue;
         }
@@ -155,7 +258,6 @@ export class ClaudeHistoryReader {
           ? this.extractText(firstUserMsg.content).substring(0, 150)
           : "Empty conversation";
 
-        // Use file modification time instead of last message timestamp
         const stats = fs.statSync(filePath);
         const lastTimestamp = stats.mtimeMs;
 
@@ -191,7 +293,6 @@ export class ClaudeHistoryReader {
       const filePath = path.join(fullProjectPath, file);
       const messages = this.parseJsonlFile(filePath);
 
-      // Skip empty conversations
       if (this.isConversationEmpty(messages)) {
         continue;
       }
@@ -201,7 +302,6 @@ export class ClaudeHistoryReader {
         ? this.extractText(firstUserMsg.content).substring(0, 150)
         : "Empty conversation";
 
-      // Use file modification time instead of last message timestamp
       const stats = fs.statSync(filePath);
       const lastTimestamp = stats.mtimeMs;
 
@@ -234,7 +334,6 @@ export class ClaudeHistoryReader {
 
     const messages = this.parseJsonlFile(filePath);
 
-    // Return null for empty conversations
     if (this.isConversationEmpty(messages)) return null;
 
     const firstUserMsg = messages.find((m) => m.role === "user");
@@ -242,7 +341,6 @@ export class ClaudeHistoryReader {
       ? this.extractText(firstUserMsg.content).substring(0, 150)
       : "Empty conversation";
 
-    // Use file modification time instead of last message timestamp
     const stats = fs.statSync(filePath);
     const lastTimestamp = stats.mtimeMs;
 
@@ -271,67 +369,62 @@ export class ClaudeHistoryReader {
     }
 
     const lowerQuery = query.toLowerCase();
-    const results: ClaudeConversation[] = [];
+    const scoredResults: Array<{
+      conversation: ClaudeConversation;
+      score: number;
+      snippet: string;
+      matchType: string;
+    }> = [];
 
+    // Score each conversation
     for (const conv of allConversations) {
-      let snippet: string | null = null;
+      const { score, snippet, matchType } = this.calculateRelevanceScore(
+        conv,
+        query
+      );
 
-      // First, search in message content
-      for (const msg of conv.messages) {
-        try {
-          const text = this.extractText(msg.content);
-          const index = text.toLowerCase().indexOf(lowerQuery);
-
-          if (index !== -1) {
-            // Found it! Extract a window of text AROUND the keyword
-            // Take 30 chars before and 100 chars after, roughly
-            const start = Math.max(0, index - 30);
-            const end = Math.min(text.length, index + query.length + 100);
-
-            snippet = text.substring(start, end);
-
-            // Add ellipsis if we truncated
-            if (start > 0) snippet = "..." + snippet;
-            if (end < text.length) snippet = snippet + "...";
-
-            break;
-          }
-        } catch (e) {
-          console.error(
-            `Error processing message content in conversation ${conv.id}`,
-            e
-          );
-        }
-      }
-
-      // If no match in content, check project name
-      if (!snippet) {
-        if (
-          conv.projectName &&
-          conv.projectName.toLowerCase().includes(lowerQuery)
-        ) {
-          snippet = `Matched in project name: ${conv.projectName}`;
-        }
-      }
-
-      if (snippet) {
-        const matchedConv = { ...conv };
-        // We already truncated specifically around the keyword, so use it directly
-        matchedConv.searchSnippet = snippet;
-        results.push(matchedConv);
+      if (score > 0 && snippet) {
+        scoredResults.push({
+          conversation: conv,
+          score,
+          snippet,
+          matchType,
+        });
       }
     }
 
-    console.log(
-      `[Claude Memory] Found ${results.length} results for query "${lowerQuery}".`
+    // Sort by relevance score (highest first)
+    scoredResults.sort((a, b) => b.score - a.score);
+
+    // Convert back to conversations with snippets
+    const results = scoredResults.map(
+      ({ conversation, snippet, score, matchType }) => {
+        const matchedConv = { ...conversation };
+        matchedConv.searchSnippet = snippet;
+
+        // Optional: Add score and match type for debugging
+        // You can display this in the UI if you want
+        (matchedConv as any).relevanceScore = score;
+        (matchedConv as any).matchType = matchType;
+
+        return matchedConv;
+      }
     );
+
+    console.log(
+      `[Claude Memory] Found ${results.length} results for "${lowerQuery}".`
+    );
+    console.log(
+      `Top 3 scores: ${results
+        .slice(0, 3)
+        .map((r: any) => `${r.relevanceScore} (${r.matchType})`)
+        .join(", ")}`
+    );
+
     return results;
   }
 
   private decodeProjectName(encodedName: string): string {
-    // Claude encodes windows paths like e:\claude-project\my-project
-    // into a single folder name: e--claude-project-my-project
-    // The path separator becomes '--'. We want to extract the final component.
     const parts = encodedName.split(/--/);
     return parts[parts.length - 1] || encodedName;
   }
