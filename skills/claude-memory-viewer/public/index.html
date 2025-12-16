@@ -69,6 +69,7 @@ function App(){
   const [search,setSearch]=useState('');
   const [debouncedSearch,setDebouncedSearch]=useState('');
   const [filtered,setFiltered]=useState([]);
+  const [selectedConvIds,setSelectedConvIds]=useState(new Set());
   const wsRef=useRef(null);
   const debounceTimerRef=useRef(null);
   const isLoadingRef=useRef(false);
@@ -83,7 +84,7 @@ function App(){
     }
   },[selectedProject]);
 
-  // Debounce search input - wait 600ms after user stops typing
+  // Debounce search input - wait 300ms after user stops typing
   useEffect(()=>{
     if(debounceTimerRef.current){
       clearTimeout(debounceTimerRef.current);
@@ -91,7 +92,7 @@ function App(){
     
     debounceTimerRef.current=setTimeout(()=>{
       setDebouncedSearch(search);
-    },600);
+    },300);
 
     return ()=>{
       if(debounceTimerRef.current){
@@ -251,6 +252,67 @@ function App(){
 
   const formatDate=(ts)=>new Date(ts).toLocaleString();
 
+  const toggleSelectConversation = (convId) => {
+    const newSelected = new Set(selectedConvIds);
+    if (newSelected.has(convId)) {
+      newSelected.delete(convId);
+    } else {
+      newSelected.add(convId);
+    }
+    setSelectedConvIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedConvIds.size === filtered.length) {
+      setSelectedConvIds(new Set());
+    } else {
+      setSelectedConvIds(new Set(filtered.map(c => `${c.projectPath}-${c.id}`)));
+    }
+  };
+
+  const exportToMarkdown = () => {
+    const selectedConvs = filtered.filter(c => 
+      selectedConvIds.has(`${c.projectPath}-${c.id}`)
+    );
+
+    if (selectedConvs.length === 0) {
+      alert('Please select at least one conversation to export');
+      return;
+    }
+
+    let markdown = `# Claude Memory Export\n\n`;
+    markdown += `**Export Date:** ${new Date().toLocaleString()}\n`;
+    markdown += `**Search Query:** ${debouncedSearch || 'All conversations'}\n`;
+    markdown += `**Results:** ${selectedConvs.length} conversation(s) selected\n\n`;
+    markdown += `---\n\n`;
+
+    selectedConvs.forEach((conv, idx) => {
+      markdown += `## ${idx + 1}. ${conv.firstMessage.substring(0, 100)}\n\n`;
+      markdown += `- **Project:** ${conv.projectName}\n`;
+      markdown += `- **Messages:** ${conv.messageCount}\n`;
+      markdown += `- **Last Updated:** ${formatDate(conv.lastTimestamp)}\n`;
+      if (conv.relevanceScore) {
+        markdown += `- **Relevance Score:** ${conv.relevanceScore}\n`;
+      }
+      markdown += `\n### Messages\n\n`;
+
+      conv.messages.forEach((msg, msgIdx) => {
+        markdown += `#### Message ${msgIdx + 1} - ${msg.role.toUpperCase()}\n\n`;
+        markdown += `${extractText(msg.content)}\n\n`;
+      });
+
+      markdown += `---\n\n`;
+    });
+
+    const dataBlob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `claude-memory-export-${Date.now()}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const renderHighlight = (text, query) => {
     if (!query.trim()) {
       return text;
@@ -287,31 +349,62 @@ function App(){
           onChange={e=>setSearch(e.target.value)}
         />
         {!loading&&<div className="stats">💬 {filtered.length} conversation{filtered.length===1?'':'s'} {debouncedSearch?'found':'shown'}</div>}
+        
+        {filtered.length > 0 && (
+          <div style={{marginTop:'12px',display:'flex',gap:'8px',alignItems:'center'}}>
+            <button 
+              onClick={toggleSelectAll} 
+              style={{flex:1,padding:'8px 12px',fontSize:'12px',background:'#e2e8f0',color:'#2d3748',border:'none',borderRadius:'6px',cursor:'pointer',fontWeight:'600'}}
+            >
+              {selectedConvIds.size === filtered.length ? '☑️ Deselect All' : '☐ Select All'}
+            </button>
+            <button 
+              onClick={exportToMarkdown} 
+              disabled={selectedConvIds.size === 0}
+              style={{flex:1,padding:'8px 12px',fontSize:'12px',background:selectedConvIds.size > 0 ? '#48bb78':'#cbd5e0',color:'#fff',border:'none',borderRadius:'6px',cursor:selectedConvIds.size > 0 ? 'pointer':'not-allowed',fontWeight:'600'}}
+            >
+              📝 Export ({selectedConvIds.size})
+            </button>
+          </div>
+        )}
       </div>
       <div className="list">
         {loading?<div className="loading">Loading conversations...</div>:
         filtered.length===0?<div style={{padding:20,textAlign:'center',color:'#a0aec0'}}>
           {debouncedSearch?'No matches found':'No conversations found'}
         </div>:
-        filtered.map(c=><div key={`${c.projectPath}-${c.id}`} className={`item ${selected?.id===c.id?'active':''}`} onClick={()=>loadConversation(c)}>
-          <div className="item-header">
-            <div className="item-title">{
-              debouncedSearch.trim() && c.searchSnippet
-              ? renderHighlight(c.searchSnippet, debouncedSearch)
-              : c.firstMessage.length > 80 ? `${c.firstMessage.substring(0, 80)}...` : c.firstMessage
-            }</div>
-            {selectedProject==='all'&&<div className="item-project">{c.projectName}</div>}
-          </div>
-          {debouncedSearch.trim() && c.matchType && (
-            <div style={{fontSize:'10px',color:'#718096',marginBottom:'4px'}}>
-              {c.matchType === 'title' && '🎯 Title match'}
-              {c.matchType === 'project' && '📁 Project match'}
-              {c.matchType === 'message' && '💬 Content match'}
-              {c.relevanceScore && ` • Score: ${c.relevanceScore}`}
+        filtered.map(c=>{
+          const convKey = `${c.projectPath}-${c.id}`;
+          const isSelected = selectedConvIds.has(convKey);
+          
+          return <div key={convKey} className={`item ${selected?.id===c.id?'active':''}`} style={{display:'flex',gap:'8px',alignItems:'start'}}>
+            <input 
+              type="checkbox" 
+              checked={isSelected}
+              onChange={(e)=>{e.stopPropagation();toggleSelectConversation(convKey)}}
+              style={{marginTop:'16px',cursor:'pointer',width:'16px',height:'16px',flexShrink:0}}
+            />
+            <div style={{flex:1,cursor:'pointer'}} onClick={()=>loadConversation(c)}>
+              <div className="item-header">
+                <div className="item-title">{
+                  debouncedSearch.trim() && c.searchSnippet
+                  ? renderHighlight(c.searchSnippet, debouncedSearch)
+                  : c.firstMessage.length > 80 ? `${c.firstMessage.substring(0, 80)}...` : c.firstMessage
+                }</div>
+                {selectedProject==='all'&&<div className="item-project">{c.projectName}</div>}
+              </div>
+              {debouncedSearch.trim() && c.matchType && (
+                <div style={{fontSize:'10px',color:'#718096',marginBottom:'4px'}}>
+                  {c.matchType === 'title' && '🎯 Title match'}
+                  {c.matchType === 'project' && '📁 Project match'}
+                  {c.matchType === 'message' && '💬 Content match'}
+                  {c.relevanceScore && ` • Score: ${c.relevanceScore}`}
+                </div>
+              )}
+              <div className="item-meta">💬 {c.messageCount} messages · 📅 {formatDate(c.lastTimestamp)}</div>
             </div>
-          )}
-          <div className="item-meta">💬 {c.messageCount} messages · 📅 {formatDate(c.lastTimestamp)}</div>
-        </div>)}
+          </div>
+        })}
       </div>
     </div>
     <div className="main">
